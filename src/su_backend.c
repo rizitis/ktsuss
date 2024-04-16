@@ -40,18 +40,16 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <pwd.h>
-
-#if defined(__FreeBSD__)
-#include <libutil.h>
-#include <utmpx.h>
-#include <sys/signal.h>
-#else
 #include <pty.h>
 #include <utmp.h>
-#endif
 #include <termios.h>
+#include <sys/select.h> // Include for the select function
+#include <signal.h> // Include for the signal function
+#include <limits.h> // Include for PATH_MAX
 
 #include "errors.h"
+
+
 
 #ifndef MAX
 #define MAX(a,b) ((a)>(b)?(a):(b))
@@ -135,11 +133,7 @@ static int init_su(int *fdpty, const char *username, const char *password, char 
 int check_password_su(const char *username, const char *password)
 {
 	int fdpty = 0, status = 0, pid = 0;
-#if defined(__FreeBSD__)
-	char *cmd[6] = { SUPATH, (char *)username, "-m", "-c", "exit", NULL };
-#else
 	char *cmd[6] = { SUPATH, (char *)username, "-p", "-c", "exit", NULL };
-#endif
 
 	pid = init_su(&fdpty, username, password, cmd);
 
@@ -159,64 +153,75 @@ int check_password_su(const char *username, const char *password)
 }
 
 
+void tty_raw(int fd);
 /* Run the given command as the given user */
 void run_su(char *username, char *password, char *command)
 {
-#if defined(__FreeBSD__)
-	char buf[BUFF_SIZE], *cmd[6] = { SUPATH, username, "-m", "-c", command, NULL };
-#else
-	char buf[BUFF_SIZE], *cmd[6] = { SUPATH, username, "-p", "-c", command, NULL };
-#endif
-	int fdpty = 0, status = 0, tty = 1;
-	pid_t pid = 0;
-	fd_set rfds;
-	struct timeval tv;
+    char buf[BUFF_SIZE], *cmd[7] = { SUPATH, username, "-p", "-l", "-c", command, NULL };
+    int fdpty = 0, status = 0, tty = 1;
+    pid_t pid = 0;
+    fd_set rfds;
+    struct timeval tv;
+    char current_dir[PATH_MAX];
 
-	pid = init_su(&fdpty, username, password, cmd);
+    // Remember the current directory
+    if (!getcwd(current_dir, sizeof(current_dir))) {
+        err(1, "getcwd()");
+    }
 
-	/* Put the terminal in raw mode */
-	if (tcgetattr(STDIN_FILENO, &orig_termios) < 0) {
-		if (errno == ENOTTY)
-			errno = tty = 0;
-		else
-			err(1, "tcgetattr()");
-	}
+    pid = init_su(&fdpty, username, password, cmd);
 
-	if (tty)
-		tty_raw(STDIN_FILENO);
+    /* Put the terminal in raw mode */
+    if (tcgetattr(STDIN_FILENO, &orig_termios) < 0) {
+        if (errno == ENOTTY)
+            errno = tty = 0;
+        else
+            err(1, "tcgetattr()");
+    }
 
-	while (1) {
-		waitpid(pid, &status, WNOHANG);
 
-		/* Ok, the program needs some interaction, so this will do it fine */
-		tv.tv_sec = 0;
-		tv.tv_usec = 10;
-		FD_ZERO(&rfds);
-		FD_SET(fdpty, &rfds);
-		FD_SET(STDIN_FILENO, &rfds);
+    // Call to tty_raw
+    if (tty)
+        tty_raw(STDIN_FILENO);
 
-		if (select(MAX(fdpty, STDIN_FILENO)+1, &rfds, NULL, NULL, &tv) < 0) err(1, "select()");
+    while (1) {
+        waitpid(pid, &status, WNOHANG);
 
-		if (FD_ISSET(fdpty, &rfds)) {
-			if ((status = read(fdpty, buf, BUFF_SIZE)) > 0)
-				write(STDOUT_FILENO, buf, status);
-			else
-				break;
+        /* Ok, the program needs some interaction, so this will do it fine */
+        tv.tv_sec = 0;
+        tv.tv_usec = 10;
+        FD_ZERO(&rfds);
+        FD_SET(fdpty, &rfds);
+        FD_SET(STDIN_FILENO, &rfds);
 
-		}
-		else if (FD_ISSET(STDIN_FILENO, &rfds)) {
-			status = read(STDIN_FILENO, buf, BUFF_SIZE);
-			write(fdpty, buf, status);
-		}
-		usleep(100);
-	}
+        if (select(MAX(fdpty, STDIN_FILENO)+1, &rfds, NULL, NULL, &tv) < 0) err(1, "select()");
 
-	end_su(fdpty);
-	close(fdpty);
+        if (FD_ISSET(fdpty, &rfds)) {
+            if ((status = read(fdpty, buf, BUFF_SIZE)) > 0)
+                write(STDOUT_FILENO, buf, status);
+            else
+                break;
 
-	if (tty)
-	    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) < 0) 
-			err(1, "tcsetattr()");
+        }
+        else if (FD_ISSET(STDIN_FILENO, &rfds)) {
+            status = read(STDIN_FILENO, buf, BUFF_SIZE);
+            write(fdpty, buf, status);
+        }
+        usleep(100);
+    }
+
+    end_su(fdpty);
+    close(fdpty);
+
+    // Return to the original directory
+    if (chdir(current_dir) < 0) {
+        err(1, "chdir()");
+    }
+
+    if (tty)
+        if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) < 0)
+            err(1, "tcsetattr()");
 }
+
 
 #endif
