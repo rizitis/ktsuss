@@ -29,6 +29,8 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * modified by Anagnostakis Ioannis (rizitis) 16/4/24
  */
 
 #ifndef SU_BACKEND_H
@@ -36,5 +38,6 @@
 
 int check_password_su(const char *username, const char *password);
 void run_su(char *username, char *password, char *command);
+void tty_raw(int fd); // Declaration of the tty_raw function
 
 #endif
