@@ -4,7 +4,7 @@ ktsuss-slackware
 
 PS: to run scripts or apps that are stored in `/usr/sbin or /bin etc...` all these app/PATHS should be in user s $PATH.
 For example to run `ktsuss slackpkg update` properly, your user s ~/.bashrc should have the line `export PATH="/usr/sbin:$PATH"
-` etc...*
+` because slackpkg real path is /usr/sbin/slackpkg, etc...*
 
 
 ======
