@@ -6,6 +6,9 @@ ktsuss-slackware
 For example to run `ktsuss slackpkg update` properly, your user s ~/.bashrc should have the line `export PATH="/usr/sbin:$PATH"
 ` because slackpkg real path is /usr/sbin/slackpkg, etc...*
 
+**INSTALLATION**
+*It builds fine with the ktsuss from SBO*
+
 
 ======
 
