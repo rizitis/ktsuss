@@ -7,6 +7,7 @@ For example to run `ktsuss slackpkg update` properly, your user s ~/.bashrc shou
 ` because slackpkg real path is /usr/sbin/slackpkg, etc...*
 
 **INSTALLATION**
+
 *It builds fine with the ktsuss from SBO*
 
 
